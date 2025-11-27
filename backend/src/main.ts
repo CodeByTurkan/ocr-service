@@ -18,10 +18,10 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle('Aurora Bank')
-    .setDescription('The Aurora Bank API description')
+    .setTitle('OCR full-stack')
+    .setDescription('The description')
     .setVersion('1.0')
-    .addTag('Aurora Bank')
+    .addTag('ocr')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('client/api/v1/openapi', app, document);
