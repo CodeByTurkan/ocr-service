@@ -6,3 +6,4 @@ build/
 .env.*
 *.log
 
+backend/vision-key.json

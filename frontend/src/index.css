@@ -1,15 +1,15 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
 
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  @apply box-border;
 }
 
 body {
-  font-family: 'Shift', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
-    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  @apply min-h-screen bg-slate-50 font-['Inter',_system-ui,_-apple-system,_sans-serif] text-slate-900 antialiased;
 }

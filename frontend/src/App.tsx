@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
+  Calendar,
   Camera,
   CheckCircle2,
+  ChevronDown,
   CreditCard,
   Eye,
   FileText,
@@ -11,12 +13,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { processOCRFile } from "./utils/api";
 
-interface Errors {
-  front?: string;
-  back?: string;
-  passport?: string;
-}
+type DocumentType = "id" | "passport";
 
 interface UploadedFile {
   file: File;
@@ -29,470 +28,76 @@ interface UploadedFile {
   };
 }
 
-type DocumentType = "id" | "passport";
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "#FFFFFF",
-    padding: "3rem clamp(1rem, 4vw, 4rem)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  formWrapper: {
-    width: "100%",
-    maxWidth: "760px",
-    background: "#FFFFFF",
-    borderRadius: "28px",
-    border: "1px solid #E4E7EC",
-    boxShadow: "0 35px 80px rgba(15, 23, 42, 0.08)",
-    padding: "2.75rem",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "2rem",
-  },
-  formHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "1rem",
-    flexWrap: "wrap" as const,
-  },
-  label: {
-    fontSize: "0.85rem",
-    fontWeight: 700,
-    color: "#0F172A",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase" as const,
-    marginBottom: "0.65rem",
-  },
-  docSwitch: {
-    border: "1px solid #E4E7EC",
-    borderRadius: "18px",
-    padding: "0.4rem",
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: "0.4rem",
-    background: "#F8FAFC",
-  },
-  docButton: (isSelected: boolean) => ({
-    position: "relative" as const,
-    border: "none",
-    borderRadius: "14px",
-    padding: "0.95rem 1.1rem",
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    cursor: "pointer",
-    background: isSelected ? "#FFFFFF" : "transparent",
-    boxShadow: isSelected ? "0 18px 40px rgba(15, 23, 42, 0.12)" : "none",
-    transition: "all 0.25s ease",
-  }),
-  iconBox: (isSelected: boolean) => ({
-    padding: "0.75rem",
-    borderRadius: "12px",
-    background: isSelected ? "#EEF2FF" : "#E2E8F0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  }),
-  helperText: {
-    fontSize: "0.85rem",
-    color: "#94A3B8",
-  },
-  uploadBox: (hasFile: boolean, hasError: boolean) => ({
-    position: "relative" as const,
-    borderRadius: "22px",
-    border: hasFile
-      ? "1.5px solid #34D399"
-      : hasError
-        ? "1.5px solid #F97066"
-        : "1.5px dashed #CBD5F5",
-    padding: "2.25rem",
-    background: hasFile ? "#F3FFFA" : "#F7F9FC",
-    minHeight: "260px",
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "1rem",
-    textAlign: "center" as const,
-  }),
-  previewImage: {
-    width: "100%",
-    height: "14rem",
-    objectFit: "cover" as const,
-    borderRadius: "16px",
-  },
-  buttonRow: {
-    display: "flex",
-    gap: "1rem",
-    flexWrap: "wrap" as const,
-  },
-  button: (isPrimary: boolean) => ({
-    flex: 1,
-    minWidth: "200px",
-    padding: "1.1rem 1.5rem",
-    borderRadius: "18px",
-    border: isPrimary ? "none" : "1.5px solid #E4E7EC",
-    background: isPrimary ? "#111827" : "#FFFFFF",
-    color: isPrimary ? "#FFFFFF" : "#111827",
-    fontSize: "1rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: isPrimary
-      ? "0 22px 40px rgba(15, 23, 42, 0.2)"
-      : "0 10px 25px rgba(15, 23, 42, 0.08)",
-  }),
-  overlay: {
-    position: "fixed" as const,
-    inset: 0,
-    background: "rgba(15, 23, 42, 0.38)",
-    backdropFilter: "blur(8px)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 50,
-  },
-  modal: {
-    background: "#FFFFFF",
-    borderRadius: "28px",
-    padding: "2.5rem",
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    gap: "1rem",
-    boxShadow: "0 35px 90px rgba(15, 23, 42, 0.25)",
-  },
-  error: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.45rem",
-    color: "#B42318",
-    fontSize: "0.85rem",
-    marginTop: "0.45rem",
-  },
-  footerNote: {
-    marginTop: "2rem",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "0.5rem",
-    color: "#475467",
-    fontSize: "0.9rem",
-  },
-};
-
-interface FileUploadBoxProps {
-  label: string;
-  uploadedFile: UploadedFile | null;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onRemove: () => void;
-  onPreview: (src: string) => void;
-  error?: string;
+interface Errors {
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  citizenship?: string;
+  uin?: string;
+  privacy?: string;
+  terms?: string;
+  front?: string;
+  back?: string;
+  passport?: string;
 }
 
-const FileUploadBox: React.FC<FileUploadBoxProps> = ({
-  label,
-  uploadedFile,
-  onChange,
-  onRemove,
-  onPreview,
-  error,
-}) => (
-  <div style={{ flex: 1, minWidth: "280px" }}>
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
-      <label style={styles.label}>{label}</label>
-      {!uploadedFile && (
-        <span style={styles.helperText}>PNG • JPG • PDF • up to 10MB</span>
-      )}
-    </div>
+const countries = [
+  "Belarus",
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "Germany",
+  "France",
+  "Italy",
+  "Spain",
+  "Poland",
+  "Ukraine",
+  "Russia",
+  "Lithuania",
+  "Latvia",
+  "Estonia",
+  "Other",
+];
 
-    {uploadedFile ? (
-      <div
-        style={{
-          borderRadius: "24px",
-          overflow: "hidden",
-          border: "1.5px solid #34D399",
-          background: "#FFFFFF",
-          boxShadow: "0 20px 60px rgba(15, 23, 42, 0.08)",
-        }}
-      >
-        <div style={{ position: "relative" }}>
-          <img
-            src={uploadedFile.preview}
-            alt="Preview"
-            style={styles.previewImage}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.45))",
-            }}
-          />
-
-          <div
-            style={{
-              position: "absolute",
-              top: "0.9rem",
-              right: "0.9rem",
-              display: "flex",
-              gap: "0.45rem",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => onPreview(uploadedFile.preview)}
-              style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "12px",
-                border: "none",
-                background: "rgba(255,255,255,0.95)",
-                cursor: "pointer",
-              }}
-            >
-              <Eye size={18} color="#0F172A" />
-            </button>
-            <button
-              type="button"
-              onClick={onRemove}
-              style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "12px",
-                border: "none",
-                background: "rgba(255,255,255,0.95)",
-                cursor: "pointer",
-              }}
-            >
-              <X size={18} color="#DC2626" />
-            </button>
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              bottom: "1.1rem",
-              left: "1.1rem",
-              display: "flex",
-              gap: "0.6rem",
-              flexWrap: "wrap" as const,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                background: "rgba(255,255,255,0.95)",
-                padding: "0.4rem 0.95rem",
-                borderRadius: "999px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                color: "#047857",
-              }}
-            >
-              <ShieldCheck size={16} color="#10B981" />
-              {uploadedFile.confidence}% accurate
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                background: "rgba(255,255,255,0.95)",
-                padding: "0.35rem 0.9rem",
-                borderRadius: "999px",
-                fontSize: "0.8rem",
-                color: "#0F172A",
-              }}
-            >
-              <Camera size={14} />
-              AI scanned
-            </div>
-          </div>
-        </div>
-
-        {uploadedFile.extractedData && (
-          <div
-            style={{
-              padding: "1.5rem",
-              borderTop: "1px solid #DCFCE7",
-              background: "#F1FFF8",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                gap: "1.2rem",
-                fontSize: "0.9rem",
-              }}
-            >
-              <div>
-                <span style={{ color: "#6B7280", fontWeight: 500 }}>Holder</span>
-                <p
-                  style={{
-                    color: "#0F172A",
-                    fontWeight: 600,
-                    marginTop: "0.35rem",
-                  }}
-                >
-                  {uploadedFile.extractedData.name}
-                </p>
-              </div>
-              <div>
-                <span style={{ color: "#6B7280", fontWeight: 500 }}>Number</span>
-                <p
-                  style={{
-                    color: "#0F172A",
-                    fontWeight: 600,
-                    marginTop: "0.35rem",
-                  }}
-                >
-                  {uploadedFile.extractedData.number}
-                </p>
-              </div>
-              <div>
-                <span style={{ color: "#6B7280", fontWeight: 500 }}>
-                  Valid thru
-                </span>
-                <p
-                  style={{
-                    color: "#0F172A",
-                    fontWeight: 600,
-                    marginTop: "0.35rem",
-                  }}
-                >
-                  {uploadedFile.extractedData.expiry}
-                </p>
-              </div>
-            </div>
-            <div
-              style={{
-                marginTop: "0.8rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                color: "#059669",
-                fontSize: "0.85rem",
-                fontWeight: 500,
-              }}
-            >
-              <CheckCircle2 size={16} />
-              Data extracted successfully
-            </div>
-          </div>
-        )}
-      </div>
-    ) : (
-      <label style={styles.uploadBox(false, !!error)}>
-        <input
-          type="file"
-          accept="image/*,.pdf"
-          onChange={onChange}
-          style={{ display: "none" }}
-        />
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "0.75rem",
-          }}
-        >
-          <div
-            style={{
-              padding: "1rem",
-              borderRadius: "50%",
-              background: error ? "#FEE2E2" : "#E0E7FF",
-            }}
-          >
-            <Upload size={32} color={error ? "#B42318" : "#4338CA"} />
-          </div>
-          <div>
-            <p
-              style={{
-                fontSize: "1rem",
-                fontWeight: 600,
-                margin: 0,
-                color: "#0F172A",
-              }}
-            >
-              Drag & drop to upload
-            </p>
-            <p style={{ fontSize: "0.85rem", color: "#64748B", margin: 0 }}>
-              or click to browse securely
-            </p>
-          </div>
-          <div
-            style={{
-              marginTop: "0.4rem",
-              padding: "0.7rem 1.3rem",
-              background: "#0F172A",
-              color: "#FFFFFF",
-              borderRadius: "12px",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-            }}
-          >
-            <Camera size={16} />
-            Choose file
-          </div>
-        </div>
-      </label>
-    )}
-
-    {error && (
-      <div style={styles.error}>
-        <AlertCircle size={16} />
-        <p>{error}</p>
-      </div>
-    )}
-  </div>
-);
+const getInputClasses = (hasError: boolean) =>
+  `w-full rounded-2xl border px-4 py-3 text-base font-medium transition focus:outline-none focus:ring-4 ${
+    hasError
+      ? "border-rose-300 bg-rose-50 text-rose-900 focus:border-rose-500 focus:ring-rose-100"
+      : "border-slate-200 bg-slate-50 text-slate-900 focus:border-slate-900 focus:ring-slate-100"
+  }`;
 
 const OCRUploadSystem: React.FC = () => {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [citizenship, setCitizenship] = useState("");
+  const [uin, setUin] = useState("");
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showCitizenshipDropdown, setShowCitizenshipDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showCitizenshipDropdown) return;
+    const handleClick = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowCitizenshipDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showCitizenshipDropdown]);
+
   const [documentType, setDocumentType] = useState<DocumentType>("id");
   const [frontFile, setFrontFile] = useState<UploadedFile | null>(null);
   const [backFile, setBackFile] = useState<UploadedFile | null>(null);
   const [passportFile, setPassportFile] = useState<UploadedFile | null>(null);
   const [errors, setErrors] = useState<Errors>({});
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  const simulateOCR = (file: File): Promise<UploadedFile> =>
-    new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setTimeout(() => {
-          resolve({
-            file,
-            preview: event.target?.result as string,
-            confidence: Math.floor(Math.random() * 10) + 90,
-            extractedData: {
-              name: "Jane Cooper",
-              number: "DOC-" + Math.random().toString().slice(2, 10),
-              expiry: "2030-06-15",
-            },
-          });
-        }, 1400);
-      };
-      reader.readAsDataURL(file);
-    });
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -502,12 +107,32 @@ const OCRUploadSystem: React.FC = () => {
     if (!file) return;
 
     setIsProcessing(true);
-    const uploadedFile = await simulateOCR(file);
-    setIsProcessing(false);
-
-    if (type === "front") setFrontFile(uploadedFile);
-    if (type === "back") setBackFile(uploadedFile);
-    if (type === "passport") setPassportFile(uploadedFile);
+    try {
+      const uploadedFile = await processOCRFile(file);
+      if (type === "front") {
+        setFrontFile(uploadedFile);
+        setErrors((prev) => ({ ...prev, front: undefined }));
+      } else if (type === "back") {
+        setBackFile(uploadedFile);
+        setErrors((prev) => ({ ...prev, back: undefined }));
+      } else {
+        setPassportFile(uploadedFile);
+        setErrors((prev) => ({ ...prev, passport: undefined }));
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to process document";
+      if (type === "front") {
+        setErrors((prev) => ({ ...prev, front: message }));
+      } else if (type === "back") {
+        setErrors((prev) => ({ ...prev, back: message }));
+      } else {
+        setErrors((prev) => ({ ...prev, passport: message }));
+      }
+      alert(`Error: ${message}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const removeFile = (type: "front" | "back" | "passport") => {
@@ -516,8 +141,16 @@ const OCRUploadSystem: React.FC = () => {
     if (type === "passport") setPassportFile(null);
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = (): Errors => {
     const newErrors: Errors = {};
+    if (!firstName.trim()) newErrors.firstName = "This field is required";
+    if (!lastName.trim()) newErrors.lastName = "This field is required";
+    if (!dateOfBirth.trim()) newErrors.dateOfBirth = "This field is required";
+    if (!citizenship) newErrors.citizenship = "This field is required";
+    if (!uin.trim()) newErrors.uin = "This field is required";
+    if (!agreePrivacy) newErrors.privacy = "Please confirm to continue";
+    if (!agreeTerms) newErrors.terms = "Please confirm to continue";
+
     if (documentType === "id") {
       if (!frontFile) newErrors.front = "Front side is required";
       if (!backFile) newErrors.back = "Back side is required";
@@ -525,210 +158,299 @@ const OCRUploadSystem: React.FC = () => {
       newErrors.passport = "Passport photo is required";
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = () => {
-    if (!validateForm()) return;
+    const validationErrors = validateForm();
+    setErrors(validationErrors);
+    const errorKeys = Object.keys(validationErrors);
+    if (errorKeys.length > 0) {
+      const target = document.querySelector(
+        `[data-error-key="${errorKeys[0]}"]`
+      );
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
 
-    const formData = {
-      documentType,
-      frontFile: frontFile?.file,
-      backFile: backFile?.file,
-      passportFile: passportFile?.file,
+    const payload = {
+      personalDetails: {
+        firstName,
+        lastName,
+        dateOfBirth,
+        citizenship,
+        uin,
+        documentType,
+      },
+      documents: {
+        frontFile: frontFile?.file,
+        backFile: backFile?.file,
+        passportFile: passportFile?.file,
+      },
+      ocrData:
+        documentType === "id"
+          ? { front: frontFile?.extractedData, back: backFile?.extractedData }
+          : { passport: passportFile?.extractedData },
     };
 
-    console.log("Form submitted:", formData);
-    alert("Form submitted successfully! Check console for data.");
+    console.log("Form submitted:", payload);
+    alert(
+      "Form submitted! Manual entries will now be compared with OCR results."
+    );
+  };
+
+  const resetForm = () => {
+    setFirstName("");
+    setLastName("");
+    setDateOfBirth("");
+    setCitizenship("");
+    setUin("");
+    setAgreePrivacy(false);
+    setAgreeTerms(false);
+    setFrontFile(null);
+    setBackFile(null);
+    setPassportFile(null);
+    setErrors({});
   };
 
   return (
-    <div style={styles.container}>
+    <div className="min-h-screen bg-slate-50 py-10 px-4 sm:px-6 lg:px-8">
       {isProcessing && (
-        <div style={styles.overlay}>
-          <div style={styles.modal}>
-            <Loader2
-              size={48}
-              color="#2563EB"
-              style={{ animation: "spin 1s linear infinite" }}
-            />
-            <p
-              style={{
-                fontSize: "1.125rem",
-                fontWeight: "600",
-                color: "#1F2937",
-              }}
-            >
-              Processing document...
-            </p>
-            <p style={{ fontSize: "0.875rem", color: "#6B7280" }}>
-              Extracting data with OCR
-            </p>
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm">
+          <div className="flex h-full items-center justify-center px-4">
+            <div className="flex flex-col items-center gap-3 rounded-3xl bg-white p-10 text-center shadow-2xl">
+              <Loader2 className="h-12 w-12 animate-spin text-slate-900" />
+              <p className="text-lg font-semibold text-slate-900">
+                Processing document...
+              </p>
+              <p className="text-sm text-slate-500">
+                Extracting and validating your data with OCR
+              </p>
+            </div>
           </div>
         </div>
       )}
 
       {previewImage && (
-        <div style={styles.overlay} onClick={() => setPreviewImage(null)}>
-          <div
-            style={{ position: "relative", maxWidth: "90%", maxHeight: "90vh" }}
-          >
-            <button
-              onClick={() => setPreviewImage(null)}
-              style={{
-                position: "absolute",
-                top: "-3rem",
-                right: 0,
-                padding: "0.5rem",
-                background: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-              }}
-              type="button"
-            >
-              <X size={24} />
-            </button>
-            <img
-              src={previewImage}
-              alt="Preview"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "85vh",
-                borderRadius: "12px",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/70 backdrop-blur-sm"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="flex h-full items-center justify-center px-6">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="absolute -right-4 -top-4 rounded-full bg-white p-2 shadow-lg"
+              >
+                <X className="h-5 w-5 text-slate-900" />
+              </button>
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="max-h-[85vh] max-w-[90vw] rounded-3xl shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
           </div>
         </div>
       )}
 
-      <div style={styles.formWrapper}>
-        <div style={styles.formHeader}>
-          <div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "1.5rem",
-                color: "#0F172A",
-                fontWeight: 700,
-              }}
-            >
-              Document check
-            </h1>
-            <p style={{ color: "#64748B", margin: 0 }}>
-              Choose the document you need to verify and drop the files. That’s
-              it.
+      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+        <section className="rounded-3xl bg-white p-8 shadow-lg shadow-slate-200 ring-1 ring-slate-100">
+          <header className="mb-8 flex flex-col gap-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Manual Input
             </p>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              color: "#059669",
-              fontWeight: 600,
-            }}
-          >
-            <ShieldCheck size={18} />
-            Encrypted upload
-          </div>
-        </div>
+            <h1 className="text-3xl font-semibold text-slate-900">
+              Personal Details
+            </h1>
+            <p className="text-base text-slate-500">
+              Enter the data exactly as it appears on your identity document. Our
+              OCR will verify that both sources match before submission.
+            </p>
+          </header>
 
-        <div>
-          <label style={styles.label}>Document type</label>
-          <div style={styles.docSwitch}>
-            <button
-              type="button"
-              onClick={() => setDocumentType("id")}
-              style={styles.docButton(documentType === "id")}
-            >
-              <div style={styles.iconBox(documentType === "id")}>
-                <CreditCard
-                  size={26}
-                  color={documentType === "id" ? "#1D4ED8" : "#94A3B8"}
-                />
-              </div>
-              <div style={{ textAlign: "left" }}>
-                <span
-                  style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: documentType === "id" ? "#111827" : "#6B7280",
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2" data-error-key="firstName">
+              <label className="text-sm font-semibold text-slate-700">
+                First Name
+              </label>
+              <input
+                name="firstName"
+                value={firstName}
+                onChange={(e) => {
+                  setFirstName(e.target.value);
+                  setErrors((prev) => ({ ...prev, firstName: undefined }));
+                }}
+                placeholder="Type name"
+                className={getInputClasses(!!errors.firstName)}
+              />
+              <HelperText message={errors.firstName} />
+            </div>
+
+            <div className="space-y-2" data-error-key="lastName">
+              <label className="text-sm font-semibold text-slate-700">
+                Last Name
+              </label>
+              <input
+                name="lastName"
+                value={lastName}
+                onChange={(e) => {
+                  setLastName(e.target.value);
+                  setErrors((prev) => ({ ...prev, lastName: undefined }));
+                }}
+                placeholder="Type last name"
+                className={getInputClasses(!!errors.lastName)}
+              />
+              <HelperText message={errors.lastName} />
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2" data-error-key="dateOfBirth">
+              <label className="text-sm font-semibold text-slate-700">
+                Date of Birth
+              </label>
+              <div className="relative">
+                <input
+                  name="dateOfBirth"
+                  value={dateOfBirth}
+                  onChange={(e) => {
+                    setDateOfBirth(e.target.value);
+                    setErrors((prev) => ({ ...prev, dateOfBirth: undefined }));
                   }}
-                >
-                  ID Document
-                </span>
-                <small style={{ color: "#94A3B8" }}>Front + back</small>
-              </div>
-              {documentType === "id" && (
-                <CheckCircle2
-                  size={18}
-                  color="#22C55E"
-                  style={{ position: "absolute", top: 10, right: 12 }}
+                  placeholder="DD/MM/YYYY"
+                  className={getInputClasses(!!errors.dateOfBirth) + " pr-12"}
                 />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setDocumentType("passport")}
-              style={styles.docButton(documentType === "passport")}
-            >
-              <div style={styles.iconBox(documentType === "passport")}>
-                <FileText
-                  size={26}
-                  color={documentType === "passport" ? "#1D4ED8" : "#94A3B8"}
-                />
+                <Calendar className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               </div>
-              <div style={{ textAlign: "left" }}>
-                <span
-                  style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: documentType === "passport" ? "#111827" : "#6B7280",
-                  }}
-                >
-                  Passport
-                </span>
-                <small style={{ color: "#94A3B8" }}>Photo page</small>
-              </div>
-              {documentType === "passport" && (
-                <CheckCircle2
-                  size={18}
-                  color="#22C55E"
-                  style={{ position: "absolute", top: 10, right: 12 }}
-                />
-              )}
-            </button>
-          </div>
-        </div>
+              <HelperText message={errors.dateOfBirth} placeholder="Label" />
+            </div>
 
-        <p style={{ color: "#94A3B8", margin: 0 }}>
-          • Use bright, even lighting • Upload clear scans • Keep documents
-          within 10MB
-        </p>
-
-        {documentType === "id" ? (
-          <div>
-            <h3
-              style={{
-                marginBottom: "0.5rem",
-                fontSize: "1.05rem",
-                color: "#0F172A",
-              }}
-            >
-              Upload national ID
-            </h3>
             <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "1.25rem",
-              }}
+              className="space-y-2"
+              data-error-key="citizenship"
+              ref={dropdownRef}
             >
+              <label className="text-sm font-semibold text-slate-700">
+                Citizenship
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowCitizenshipDropdown((prev) => !prev)}
+                className={`relative flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-base font-medium transition focus:outline-none focus:ring-4 ${
+                  errors.citizenship
+                    ? "border-rose-300 bg-rose-50 text-rose-900 focus:border-rose-500 focus:ring-rose-100"
+                    : "border-slate-200 bg-slate-50 text-slate-900 focus:border-slate-900 focus:ring-slate-100"
+                }`}
+              >
+                <span className={citizenship ? "text-slate-900" : "text-slate-400"}>
+                  {citizenship || "Choose country"}
+                </span>
+                <ChevronDown className="h-5 w-5 text-slate-400" />
+              </button>
+              {showCitizenshipDropdown && (
+                <div className="mt-2 max-h-60 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
+                  {countries.map((country) => (
+                    <button
+                      key={country}
+                      type="button"
+                      className="w-full px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-50"
+                      onClick={() => {
+                        setCitizenship(country);
+                        setErrors((prev) => ({ ...prev, citizenship: undefined }));
+                        setShowCitizenshipDropdown(false);
+                      }}
+                    >
+                      {country}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <HelperText message={errors.citizenship} />
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">
+                Document Type
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {(["id", "passport"] as DocumentType[]).map((type) => {
+                  const active = documentType === type;
+                  const label = type === "id" ? "ID Document" : "Passport";
+                  const Icon = type === "id" ? CreditCard : FileText;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setDocumentType(type)}
+                      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-base font-semibold transition ${
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                      }`}
+                    >
+                      <span className={`rounded-xl p-2 ${active ? "bg-white/20" : "bg-slate-100"}`}>
+                        <Icon className={`h-5 w-5 ${active ? "text-white" : "text-slate-500"}`} />
+                      </span>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2" data-error-key="uin">
+              <label className="text-sm font-semibold text-slate-700">
+                Unique Identification Number (UIN)
+              </label>
+              <input
+                name="uin"
+                value={uin}
+                onChange={(e) => {
+                  setUin(e.target.value);
+                  setErrors((prev) => ({ ...prev, uin: undefined }));
+                }}
+                placeholder="Type number"
+                className={getInputClasses(!!errors.uin)}
+              />
+              <HelperText message={errors.uin} />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl bg-white p-8 shadow-lg shadow-slate-200 ring-1 ring-slate-100">
+          <div className="flex flex-col gap-2 border-b border-slate-100 pb-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Uploads
+            </p>
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-3xl font-semibold text-slate-900">
+                  Document Verification
+                </h2>
+                <p className="text-base text-slate-500">
+                  Upload clear scans so we can compare OCR output with your manual
+                  entries.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+                <ShieldCheck className="h-4 w-4" />
+                Bank-grade encryption
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-6 text-sm text-slate-500">
+            • Use bright, even lighting • Upload clear scans • Keep documents
+            within 10MB
+          </p>
+
+          {documentType === "id" ? (
+            <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
               <FileUploadBox
                 label="Front side *"
                 uploadedFile={frontFile}
@@ -736,6 +458,7 @@ const OCRUploadSystem: React.FC = () => {
                 onRemove={() => removeFile("front")}
                 onPreview={(src) => setPreviewImage(src)}
                 error={errors.front}
+                errorKey="front"
               />
               <FileUploadBox
                 label="Back side *"
@@ -744,60 +467,234 @@ const OCRUploadSystem: React.FC = () => {
                 onRemove={() => removeFile("back")}
                 onPreview={(src) => setPreviewImage(src)}
                 error={errors.back}
+                errorKey="back"
               />
             </div>
+          ) : (
+            <div className="mt-6">
+              <FileUploadBox
+                label="Passport photo *"
+                uploadedFile={passportFile}
+                onChange={(e) => handleFileUpload(e, "passport")}
+                onRemove={() => removeFile("passport")}
+                onPreview={(src) => setPreviewImage(src)}
+                error={errors.passport}
+                errorKey="passport"
+              />
+            </div>
+          )}
+
+          <div className="mt-8 space-y-4">
+            <label className="flex items-start gap-3" data-error-key="privacy">
+              <input
+                type="checkbox"
+                className="mt-1 h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-200"
+                checked={agreePrivacy}
+                onChange={(e) => {
+                  setAgreePrivacy(e.target.checked);
+                  setErrors((prev) => ({ ...prev, privacy: undefined }));
+                }}
+              />
+              <span className="text-sm text-slate-600">
+                I agree to the processing of my personal data for the purpose of
+                handling my inquiry and have read the{" "}
+                <a href="#" className="font-semibold text-slate-900 underline">
+                  Privacy Policy
+                </a>
+                .
+                <HelperText message={errors.privacy} />
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3" data-error-key="terms">
+              <input
+                type="checkbox"
+                className="mt-1 h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-200"
+                checked={agreeTerms}
+                onChange={(e) => {
+                  setAgreeTerms(e.target.checked);
+                  setErrors((prev) => ({ ...prev, terms: undefined }));
+                }}
+              />
+              <span className="text-sm text-slate-600">
+                I agree to the processing of my personal data for the purpose of
+                handling my inquiry and have read the{" "}
+                <a href="#" className="font-semibold text-slate-900 underline">
+                  Terms of Use
+                </a>
+                .
+                <HelperText message={errors.terms} />
+              </span>
+            </label>
           </div>
-        ) : (
-          <div>
-            <h3
-              style={{
-                marginBottom: "0.5rem",
-                fontSize: "1.05rem",
-                color: "#0F172A",
-              }}
+
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="flex-1 rounded-2xl border border-slate-200 bg-white py-3 text-base font-semibold text-slate-900 transition hover:border-slate-400"
             >
-              Upload passport
-            </h3>
-            <FileUploadBox
-              label="Passport photo *"
-              uploadedFile={passportFile}
-              onChange={(e) => handleFileUpload(e, "passport")}
-              onRemove={() => removeFile("passport")}
-              onPreview={(src) => setPreviewImage(src)}
-              error={errors.passport}
-            />
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="flex-1 rounded-2xl bg-slate-900 py-3 text-base font-semibold text-white shadow-lg shadow-slate-300 transition hover:bg-slate-800"
+            >
+              Next
+            </button>
           </div>
-        )}
-
-        <div style={styles.buttonRow}>
-          <button
-            type="button"
-            style={styles.button(false)}
-            onClick={() => {
-              setFrontFile(null);
-              setBackFile(null);
-              setPassportFile(null);
-              setErrors({});
-            }}
-          >
-            Reset
-          </button>
-          <button type="button" style={styles.button(true)} onClick={handleSubmit}>
-            Submit
-          </button>
-        </div>
-
-        <div style={styles.footerNote}>
-          <ShieldCheck size={18} color="#10B981" />
-          Files auto-delete after review. AES-256 at rest.
-        </div>
+        </section>
       </div>
-
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
 };
+
+const HelperText: React.FC<{ message?: string; placeholder?: string }> = ({
+  message,
+  placeholder = "This field is required",
+}) => (
+  <p
+    className={`text-sm ${
+      message ? "text-rose-500" : "text-slate-400"
+    }`}
+  >
+    {message || placeholder}
+  </p>
+);
+
+interface FileUploadBoxProps {
+  label: string;
+  uploadedFile: UploadedFile | null;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemove: () => void;
+  onPreview: (src: string) => void;
+  error?: string;
+  errorKey: keyof Errors;
+}
+
+const FileUploadBox: React.FC<FileUploadBoxProps> = ({
+  label,
+  uploadedFile,
+  onChange,
+  onRemove,
+  onPreview,
+  error,
+  errorKey,
+}) => (
+  <div className="space-y-2" data-error-key={errorKey}>
+    <div className="flex items-center justify-between text-sm text-slate-500">
+      <span className="font-semibold text-slate-900">{label}</span>
+      {!uploadedFile && (
+        <span className="text-xs uppercase tracking-wide">
+          PNG • JPG • PDF • up to 10MB
+        </span>
+      )}
+    </div>
+
+    {uploadedFile ? (
+      <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+        <div className="relative">
+          <img
+            src={uploadedFile.preview}
+            alt="Preview"
+            className="h-52 w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/20 to-black/40" />
+
+          <div className="absolute right-4 top-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => onPreview(uploadedFile.preview)}
+              className="rounded-xl bg-white/90 p-2 shadow"
+            >
+              <Eye className="h-4 w-4 text-slate-900" />
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="rounded-xl bg-white/90 p-2 shadow"
+            >
+              <X className="h-4 w-4 text-rose-500" />
+            </button>
+          </div>
+
+          <div className="absolute bottom-4 left-4 flex flex-wrap gap-2">
+            <span className="flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-emerald-700">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {uploadedFile.confidence}% match
+            </span>
+            <span className="flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700">
+              <Camera className="h-3.5 w-3.5" />
+              AI scanned
+            </span>
+          </div>
+        </div>
+
+        {uploadedFile.extractedData && (
+          <div className="grid grid-cols-1 gap-4 border-t border-emerald-100 bg-emerald-50/60 p-4 text-sm text-slate-700 md:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Holder
+              </p>
+              <p className="font-semibold text-slate-900">
+                {uploadedFile.extractedData.name || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Number
+              </p>
+              <p className="font-semibold text-slate-900">
+                {uploadedFile.extractedData.number || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Valid thru
+              </p>
+              <p className="font-semibold text-slate-900">
+                {uploadedFile.extractedData.expiry || "—"}
+              </p>
+            </div>
+            <div className="col-span-full flex items-center gap-1 text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              Data extracted successfully
+            </div>
+          </div>
+        )}
+      </div>
+    ) : (
+      <label className="flex min-h-[240px] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-slate-500">
+        <input
+          type="file"
+          accept="image/*,.pdf"
+          onChange={onChange}
+          className="hidden"
+        />
+        <span className="rounded-full bg-slate-100 p-3">
+          <Upload className="h-6 w-6 text-slate-500" />
+        </span>
+        <div>
+          <p className="text-base font-semibold text-slate-900">
+            Drag & drop to upload
+          </p>
+          <p className="text-sm text-slate-500">or click to browse securely</p>
+        </div>
+        <span className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow">
+          <Camera className="mr-2 inline h-4 w-4" />
+          Choose file
+        </span>
+      </label>
+    )}
+
+    {error && (
+      <p className="mt-2 flex items-center gap-2 text-sm text-rose-500">
+        <AlertCircle className="h-4 w-4" />
+        {error}
+      </p>
+    )}
+  </div>
+);
 
 export default OCRUploadSystem;
