@@ -16,7 +16,12 @@ import {
 } from '../../../../shared/regexes/commonRegexes.regex';
 
 export class UserDto {
-  @ApiProperty({ example: 'Nigar' })
+  @ApiProperty({
+    type: String,
+    description: 'User first name',
+    required: true,
+    example: 'Emilia',
+  })
   @IsString()
   @IsNotEmpty() //he create two dtos, user adn persoanl details, in one he added, in anopther he didint.
   @MaxLength(50)
@@ -26,7 +31,12 @@ export class UserDto {
   })
   firstName: string;
 
-  @ApiProperty({ example: 'Ramazova' })
+  @ApiProperty({
+    type: String,
+    description: 'User last name',
+    required: true,
+    example: 'Kazimova',
+  })
   @IsNotEmpty()
   @IsString()
   @MaxLength(50, {
@@ -39,16 +49,24 @@ export class UserDto {
   lastName: string;
 
   @ApiProperty({
-    example: '01.01.2003',
+    type: String,
+    description: 'Date of birth',
+    required: true,
+    example: '21.11.1991',
   })
   @IsNotEmpty()
   @IsDateString() //isstring yazib amma
   @Matches(DATE_OF_BIRTH_REGEX, {
     message: 'dateOfBirth must match the DD.MM.YYYY format.',
   })
-  dateOfBirth: number;
+  dateOfBirth: string;
 
-  @ApiProperty({ example: 'Azerbaijan' })
+  @ApiProperty({
+    type: String,
+    description: 'Citizenship',
+    required: true,
+    example: 'Azerbaijan',
+  })
   @IsNotEmpty()
   @IsString()
   @MaxLength(50)
@@ -59,7 +77,10 @@ export class UserDto {
   citizenship: string;
 
   @ApiProperty({
-    example: '12345678901',
+    type: String,
+    description: 'Unique Identification Number',
+    required: true,
+    example: '12345678910',
   })
   @IsNotEmpty()
   @IsString()
@@ -68,10 +89,23 @@ export class UserDto {
   })
   uin: string;
 
-  @ApiProperty({ example: true })
+  @ApiProperty({
+    type: Boolean,
+    description: 'Consent checkbox',
+    required: true,
+  })
   @IsNotEmpty()
   @IsBoolean()
   @Transform(({ value }) => value === 'true' || value === true)
   @Equals(true)
   consent: boolean;
+
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    required: true,
+    isArray: true,
+    description: 'Attach 1 or 2 files',
+  })
+  files: any[];
 }

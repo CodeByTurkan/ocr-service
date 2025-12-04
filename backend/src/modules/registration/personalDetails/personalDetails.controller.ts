@@ -1,12 +1,21 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
 import { PersonalDetailsService } from './personalDetails.service';
 import { UserDto } from './dto/user.dto';
 import {
   ApiBadRequestResponse,
+  ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Registration')
 @Controller('registration')
@@ -17,6 +26,12 @@ export class PersonalDetailsController {
   ) {}
 
   @Post('enter-personal-details')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('files', 2))
+  @ApiBody({
+    description: 'Personal details form',
+    type: UserDto,
+  })
   @ApiOperation({
     summary: 'Submit personal details',
     description:
@@ -27,7 +42,10 @@ export class PersonalDetailsController {
     description: 'Personal details successfully saved',
   })
   @ApiBadRequestResponse({ description: 'Validation failed' })
-  async savePersonalDetails(@Body() personalDto: UserDto) {
+  async savePersonalDetails(
+    @Body() personalDto: UserDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
     //bodyden request gonderilir
     return this.personalDetailsService.personalDetails(personalDto); //controller requesti serviceden cekir, butun is servicede gorulur.
     // yeni controller eslinde requesti service gonderir ve serviceden qebul edir, butun process servicede gedir. Controller requesti qəbul edir → Body-dən datanı alır → servisin business logic-ə göndərir → nəticəni qaytarır.
