@@ -99,13 +99,4 @@ export class UserDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @Equals(true)
   consent: boolean;
-
-  @ApiProperty({
-    type: 'string',
-    format: 'binary',
-    required: true,
-    isArray: true,
-    description: 'Attach 1 or 2 files',
-  })
-  files: any[];
 }

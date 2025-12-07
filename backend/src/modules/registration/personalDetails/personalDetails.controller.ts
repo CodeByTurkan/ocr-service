@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  HttpCode,
   Post,
-  UploadedFiles,
   UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { PersonalDetailsService } from './personalDetails.service';
 import { UserDto } from './dto/user.dto';
@@ -11,11 +13,12 @@ import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConsumes,
+  ApiCreatedResponse,
   ApiOperation,
-  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { UploadFilesDto } from './dto/file-uploadDto';
 
 @ApiTags('Registration')
 @Controller('registration')
@@ -26,26 +29,33 @@ export class PersonalDetailsController {
   ) {}
 
   @Post('enter-personal-details')
+  @ApiOperation({
+    summary: 'Step 1 - Submit personal details + file + consent ',
+    description:
+      'Stores the user’s personal information + validates files + consent in Redis, and returns registration token before OCR and face recognition steps.',
+  })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FilesInterceptor('files', 2))
   @ApiBody({
     description: 'Personal details form',
-    type: UserDto,
+    type: UploadFilesDto,
   })
-  @ApiOperation({
-    summary: 'Submit personal details',
+  //body esasen post, put, patch ucun lazim olur ve file upload oalnda consumes ile brilikde ikiside alazimdir,schema gonsterir.
+  @ApiCreatedResponse({
+    // this is for 201 specially so we dont write it again.
     description:
-      'Stores the user’s personal information before OCR and face recognition steps.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Personal details successfully saved',
+      'Personal details successfully saved + file uploaded successfully',
   })
   @ApiBadRequestResponse({ description: 'Validation failed' })
-  async savePersonalDetails(
-    @Body() personalDto: UserDto,
-    @UploadedFiles() files: Express.Multer.File[],
-  ) {
+  @UseInterceptors(FilesInterceptor('files', 2))
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  )
+  @HttpCode(201)
+  async validateStepOne(@Body() personalDto: UserDto, ) {
     //bodyden request gonderilir
     return this.personalDetailsService.personalDetails(personalDto); //controller requesti serviceden cekir, butun is servicede gorulur.
     // yeni controller eslinde requesti service gonderir ve serviceden qebul edir, butun process servicede gedir. Controller requesti qəbul edir → Body-dən datanı alır → servisin business logic-ə göndərir → nəticəni qaytarır.
